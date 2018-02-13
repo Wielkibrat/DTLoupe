@@ -24,7 +24,7 @@ NSString * const DTLoupeDidHide = @"DTLoupeDidHide";
 + (CGPoint)offsetFromCenterForLoupeStyle:(DTLoupeStyle)style;
 - (UIView *)rootViewForView:(UIView *)view;
 
-+ (UIWindow *)loupeWindow;
++ (UIView *)loupeWindow;
 
 @property (nonatomic, retain) UIImage *loupeFrameImage;
 @property (nonatomic, retain) UIImage *loupeFrameBackgroundImage;
@@ -86,10 +86,10 @@ NSString * const DTLoupeDidHide = @"DTLoupeDidHide";
 	return _sharedInstance;
 }
 
-+ (UIWindow *)loupeWindow
++ (UIView *)loupeWindow
 {
 	static dispatch_once_t onceToken;
-	static UIWindow *_loupeWindow = nil;
+	static UIView *_loupeWindow = nil;
 	
 	dispatch_once(&onceToken, ^{
 		
@@ -97,11 +97,10 @@ NSString * const DTLoupeDidHide = @"DTLoupeDidHide";
 		UIWindow *mainWindow = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
 		
 		// we always adjust the loupeWindow to be identical in frame/transform to target root view
-		_loupeWindow = [[UIWindow alloc] initWithFrame:mainWindow.bounds];
+		_loupeWindow = [[UIView alloc] initWithFrame:mainWindow.bounds];
 		_loupeWindow.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
 		_loupeWindow.hidden = NO;
 		_loupeWindow.userInteractionEnabled = NO;
-		_loupeWindow.windowLevel = UIWindowLevelAlert;
 	});
 	
 	return _loupeWindow;
@@ -338,7 +337,7 @@ CGAffineTransform CGAffineTransformAndScaleMake(CGFloat sx, CGFloat sy, CGFloat 
 // keep rotation and transform of base view in sync with target root view
 - (void)adjustBaseViewIfNecessary
 {
-	UIWindow *loupeWindow = [DTLoupeView loupeWindow];
+	UIView *loupeWindow = [DTLoupeView loupeWindow];
 	
 	NSAssert(self.superview, @"Sombody removed DTLoupeView from superview!!");
 	
@@ -444,16 +443,14 @@ CGAffineTransform CGAffineTransformAndScaleMake(CGFloat sx, CGFloat sy, CGFloat 
 	// Set touchPoint as user moves around screen
 	_touchPoint = touchPoint;
 	
-	CGPoint pointInWindow = [_targetView.window convertPoint:_touchPoint fromView:_targetView];
-	CGPoint convertedLocation = [[DTLoupeView loupeWindow] convertPoint:pointInWindow fromWindow:_targetView.window];
+	CGPoint newCenter = [_targetView.window convertPoint:_touchPoint fromView:_targetView];
 	
 	// additional NAN check for safety
-	if (isnan(convertedLocation.x) || (isnan(convertedLocation.y)))
+	if (isnan(newCenter.x) || (isnan(newCenter.y)))
 	{
 		return;
 	}
 	
-	CGPoint newCenter = convertedLocation;
 	CGPoint offsetFromTouchPoint = [DTLoupeView offsetFromCenterForLoupeStyle:_style];
 	
 	newCenter.x += offsetFromTouchPoint.x;
@@ -495,7 +492,7 @@ CGAffineTransform CGAffineTransformAndScaleMake(CGFloat sx, CGFloat sy, CGFloat 
 	self.alpha = (_style == DTLoupeStyleCircle)?1.0:0.0;
 	
 	// calculate transform
-	CGPoint convertedLocation = [_targetView convertPoint:location toView:[DTLoupeView loupeWindow]];
+    CGPoint convertedLocation = [_targetView.window convertPoint:_touchPoint fromView:_targetView];
 	CGPoint offset = CGPointMake(convertedLocation.x - self.center.x, convertedLocation.y - self.center.y);
 	self.transform = CGAffineTransformAndScaleMake(0.25, 0.25, offset.x, offset.y);
 	
@@ -578,7 +575,9 @@ CGAffineTransform CGAffineTransformAndScaleMake(CGFloat sx, CGFloat sy, CGFloat 
 	CGContextTranslateCTM(ctx,-convertedLocation.x, -convertedLocation.y);
 	
 	// the loupe is not part of the rendered tree, so we don't need to hide it
+    self.hidden = YES;
 	[_targetRootView.layer renderInContext:ctx];
+    self.hidden = NO;
 	
 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
 	_loupeContentsLayer.contents = (__bridge id)(image.CGImage);
@@ -608,6 +607,7 @@ CGAffineTransform CGAffineTransformAndScaleMake(CGFloat sx, CGFloat sy, CGFloat 
 	{
 		_targetView = targetView;
 		_targetRootView = [self rootViewForView:_targetView];
+        [_targetRootView addSubview:self];
 	}
 }
 
